@@ -34,6 +34,7 @@
             zlib
             fish
             fish-iek
+            zellij
           ]);
           profile = "SHELL=/usr/bin/fish-iek fish-iek";
         }).env;
