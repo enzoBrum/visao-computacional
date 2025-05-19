@@ -11,7 +11,7 @@
         my-fish = pkgs.writeScriptBin "my-fish" /* bash */ ''
             fish -C "
 
-            cd $HOME/ufsc/INE5448
+            cd $HOME/ufsc/ine5448
             if not test -d .venv
               python -m venv .venv
               source .venv/bin/activate.fish
@@ -35,6 +35,9 @@
             python313Full
             python313Packages.pip
             python313Packages.virtualenv
+            python312Full
+            python312Packages.pip
+            python312Packages.virtualenv
             uv
             openssl
             zlib
@@ -66,7 +69,6 @@
             stdenv.cc
             binutils
             opencv
-            cacert
             #(opencv.override {
             #  enableGtk3 = true;
             #  enableCuda = true;
@@ -74,7 +76,8 @@
             #  enableFfmpeg = true;
             #})
           ]);
-          profile = ''SHELL=/usr/bin/my-fish CUDA_PATH=${pkgs.cudatoolkit} EXTRA_LDFLAGS="-L/lib -L${pkgs.linuxPackages.nvidia_x11}/lib" EXTRA_CCFLAGS="-I/usr/include" my-fish'';
+          profile = ''SHELL=/usr/bin/my-fish NIXOS_OZONE_WL="" CUDA_PATH=${pkgs.cudatoolkit} EXTRA_LDFLAGS="-L/lib -L${pkgs.linuxPackages.nvidia_x11}/lib" EXTRA_CCFLAGS="-I/usr/include" my-fish'';
         }).env;
       });
 }
+

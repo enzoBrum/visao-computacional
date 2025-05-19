@@ -11,3 +11,4 @@ wheels/
 .env
 agent.tar.gz
 data/*
+.venv2
