@@ -6,16 +6,11 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "datasets>=3.5.1",
-    "facenet-pytorch>=2.5.3",
     "gdown>=5.2.0",
-    "insightface>=0.7.3",
     "ipython>=9.2.0",
     "jupyter>=1.1.1",
-    "kagglehub>=0.3.12",
     "matplotlib>=3.10.1",
     "numpy>=1.26.4",
-    "onnx>=1.17.0",
-    "onnxruntime-gpu<1.22.0",
     "opencv-python>=4.11.0.86",
     "torch>=2.7.0",
     "torchvision>=0.22.0",
