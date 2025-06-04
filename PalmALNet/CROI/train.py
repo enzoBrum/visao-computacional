@@ -4,7 +4,6 @@ Created on Sun Jan  5 13:57:15 2020
 
 @author: Lim
 """
-sys.path.append(r"./backbone")
 # isort: skip_file
 import math
 import os
@@ -12,6 +11,7 @@ import subprocess
 import sys
 import time
 
+sys.path.append(r"./backbone")
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
