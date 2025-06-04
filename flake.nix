@@ -38,6 +38,7 @@
             python312Full
             python312Packages.pip
             python312Packages.virtualenv
+            python311
             uv
             openssl
             zlib
@@ -61,7 +62,6 @@
             gperf
             unzip
             cudatoolkit
-            linuxPackages.nvidia_x11
             libGLU libGL
             xorg.libXi xorg.libXmu freeglut
             xorg.libXext xorg.libX11 xorg.libXv xorg.libXrandr zlib 
@@ -76,7 +76,7 @@
             #  enableFfmpeg = true;
             #})
           ]);
-          profile = ''SHELL=/usr/bin/my-fish NIXOS_OZONE_WL="" CUDA_PATH=${pkgs.cudatoolkit} EXTRA_LDFLAGS="-L/lib -L${pkgs.linuxPackages.nvidia_x11}/lib" EXTRA_CCFLAGS="-I/usr/include" my-fish'';
+          profile = ''SHELL=/usr/bin/my-fish NIXOS_OZONE_WL="" EXTRA_LDFLAGS="-L/lib" EXTRA_CCFLAGS="-I/usr/include" my-fish'';
         }).env;
       });
 }
