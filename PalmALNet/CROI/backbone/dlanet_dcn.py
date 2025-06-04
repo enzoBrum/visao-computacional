@@ -19,7 +19,7 @@ BN_MOMENTUM = 0.1
 logger = logging.getLogger(__name__)
 
 def get_model_url(data='imagenet', name='dla34', hash='ba72cf86'):
-    return join('http://dl.yf.io/dla/models', data, '{}-{}.pth'.format(name, hash))
+    return "https://storage.openvinotoolkit.org/repositories/open_model_zoo/public/2022.1/dla-34/dla34-ba72cf86.pth"
 
 
 def conv3x3(in_planes, out_planes, stride=1):
