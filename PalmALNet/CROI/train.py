@@ -6,12 +6,12 @@ Created on Sun Jan  5 13:57:15 2020
 """
 # isort: skip_file
 import math
-from multiprocessing import cpu_count
 import os
 import subprocess
 import sys
 import time
 
+sys.path.append(r"./backbone")
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -23,8 +23,6 @@ from dlanet import DlaNet
 from resnet import ResNet
 import scipy.io
 
-if 1:
-    sys.path.append(r"./backbone")
 
 
 
@@ -91,13 +89,11 @@ optimizer = torch.optim.Adam(params, lr=learning_rate, weight_decay=1e-4)
 
 train_dataset = ctDataset(split="train")
 train_loader = DataLoader(
-    train_dataset, batch_size=4, shuffle=False, num_workers=cpu_count()
+    train_dataset, batch_size=4, shuffle=False, num_workers=12
 )  # num_workers是加载数据（batch）的线程数目
 
 test_dataset = ctDataset(split="val")
-test_loader = DataLoader(
-    test_dataset, batch_size=4, shuffle=False, num_workers=cpu_count()
-)
+test_loader = DataLoader(test_dataset, batch_size=4, shuffle=False, num_workers=12)
 print("the dataset has %d images" % (len(train_dataset)))
 
 
