@@ -1,0 +1,28 @@
+<annotation>
+	<folder>images</folder>
+	<filename>rpg1k-00020.jpg</filename>
+	<path>/home/erb/ufsc/ine5448/PalmALNet/CROI/data/palmprint/images/rpg1k-00020.jpg</path>
+	<source>
+		<database>rpg1k</database>
+	</source>
+	<size>
+		<width>360</width>
+		<height>640</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>palm</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<robndbox>
+			<cx>170.4295</cx>
+			<cy>318.8263</cy>
+			<w>129.4268</w>
+			<h>157.4854</h>
+			<angle>2.211593</angle>
+		</robndbox>
+		<extra />
+	</object>
+	</annotation>

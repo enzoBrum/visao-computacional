@@ -1,0 +1,28 @@
+<annotation>
+	<folder>images</folder>
+	<filename>00284.jpg</filename>
+	<path>/home/erb/ufsc/ine5448/PalmALNet/CROI/data/palmprint/images/00284.jpg</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>479</width>
+		<height>640</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>palm</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<robndbox>
+			<cx>225.1648</cx>
+			<cy>347.7833</cy>
+			<w>147.1623</w>
+			<h>113.9889</h>
+			<angle>6.243185</angle>
+		</robndbox>
+		<extra/>
+	</object>
+</annotation>
