@@ -4,6 +4,7 @@ Created on Sun Jan  5 13:57:15 2020
 
 @author: Lim
 """
+sys.path.append(r"./backbone")
 # isort: skip_file
 import math
 import os
@@ -22,8 +23,6 @@ from dlanet import DlaNet
 from resnet import ResNet
 import scipy.io
 
-# isort:off
-sys.path.append(r"./backbone")
 
 
 
