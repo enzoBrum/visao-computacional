@@ -5,13 +5,14 @@ Created on Sat Jan  4 18:11:15 2020
 @author: Lim
 """
 
-import os
-import cv2
 import math
+import os
 import random
+
+import cv2
 import numpy as np
-import torch.utils.data as data
 import pycocotools.coco as coco
+import torch.utils.data as data
 
 
 class ctDataset(data.Dataset):
@@ -21,7 +22,7 @@ class ctDataset(data.Dataset):
     std  = np.array([0.3001546018824507, 0.28620901391179554, 0.3014112676161966], dtype=np.float32).reshape(1, 1, 3)
 
     def __init__(self, data_dir='data', split='train'):
-        self.data_dir = os.path.join(data_dir, 'web_palmprint')
+        self.data_dir = os.path.join(data_dir, 'palmprint')
         self.img_dir = os.path.join(self.data_dir, 'images')
         try:
             if split == 'train':
