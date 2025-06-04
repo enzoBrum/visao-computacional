@@ -12,3 +12,4 @@ wheels/
 agent.tar.gz
 data/*
 .venv2
+.jpg
