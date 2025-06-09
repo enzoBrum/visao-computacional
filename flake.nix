@@ -39,6 +39,7 @@
             python312Packages.pip
             python312Packages.virtualenv
             python311
+            python310
             uv
             openssl
             zlib
