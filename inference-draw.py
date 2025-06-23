@@ -138,6 +138,7 @@ class Yolov5_Lite:
 
         imgs = []
         h, w = srcimg.shape[0:2]
+        final_bbs = []
         for bb in bbs:
             x1, y1, x2, y2 = bb
 
@@ -146,13 +147,14 @@ class Yolov5_Lite:
             y1 = max(0, min(y1, h - 1))
             y2 = max(0, min(y2, h - 1))
 
+            final_bbs.append((x1, y1, x2, y2))
             imgs.append(srcimg[y1:y2, x1:x2])
-        return imgs
+        return imgs, final_bbs
 
 
 class Hrnetv2_w18_dark:
     """
-    inspired from: https://github.com/open-mmlab/mmpose/blob/71ec36ebd63c475ab589afc817868e749a61491f/configs/hand_2d_keypoint/topdown_heatmap/coco_wholebody_hand/td-hm_hrnetv2-w18_dark-8xb32-210e_coco-wholebody-hand-256x256.py
+    Hrnet from: https://github.com/open-mmlab/mmpose/blob/71ec36ebd63c475ab589afc817868e749a61491f/configs/hand_2d_keypoint/topdown_heatmap/coco_wholebody_hand/td-hm_hrnetv2-w18_dark-8xb32-210e_coco-wholebody-hand-256x256.py
     """
 
     net: ort.InferenceSession
@@ -219,6 +221,7 @@ class Hrnetv2_w18_dark:
 
             score = heatmap[y, x]
 
+            print(score)
             if score < self.confidence_threshold:
                 raise Exception(f"Could not detect keypoints: {score}")
 
@@ -238,6 +241,10 @@ class Hrnetv2_w18_dark:
 
             points.append((final_x, final_y))
 
+            # img = cv2.circle(
+            #    img, (final_x, final_y), radius=3, color=(0, 255, 0), thickness=-1
+            # )
+        print(f"KEYPOINS: {points}")
         return points
 
     def get_rotation_matrix(
@@ -246,6 +253,7 @@ class Hrnetv2_w18_dark:
         x1, y1 = p1
         x2, y2 = p2
         angle = math.atan2(y2 - y1, x2 - x1)
+        # angle = math.atan(abs(y1 - y2) / abs(x1 - x2))
 
         return cv2.getRotationMatrix2D(center, math.degrees(angle), 1.0)
 
@@ -287,14 +295,34 @@ class Hrnetv2_w18_dark:
         rect_center_y = midpoint_y + 0.8 * abs(kp_x1 - kp_x2)
         rect_side = abs(kp_x1 - kp_x2) * 1.2
 
-        rect_x1 = round(midpoint_x - rect_side // 2)
-        rect_x2 = round(midpoint_x + rect_side // 2)
+        rect_x1 = max(round(midpoint_x - rect_side // 2), 0)
+        rect_x2 = max(round(midpoint_x + rect_side // 2), 0)
 
-        rect_y1 = round(rect_center_y - rect_side // 2)
-        rect_y2 = round(rect_center_y + rect_side // 2)
+        rect_y1 = min(round(rect_center_y - rect_side // 2), 255)
+        rect_y2 = min(round(rect_center_y + rect_side // 2), 255)
+        
+        print(rect_x1, rect_y1, rect_x2, rect_y2)
 
-        roi = image[rect_y1:rect_y2, rect_x1:rect_x2]
-        return roi
+        crop = image[rect_y1:rect_y2, rect_x1:rect_x2].copy()
+
+        image = cv2.rectangle(
+            image, (rect_x1, rect_y1), (rect_x2, rect_y2), (0, 0, 255)
+        )
+        image = cv2.circle(image, (midpoint_x, midpoint_y), 3, (255, 128, 60), 3)
+        image = cv2.circle(
+            image, (midpoint_x, round(rect_center_y)), 3, (255, 60, 128), 3
+        )
+
+        for i in range(2):
+            arr = np.array([keypoints[i][0], keypoints[i][1], 1])
+            arr = np.dot(rotation_matrix, arr)
+            #
+            x = int(arr[0])
+            y = int(arr[1])
+            # x, y = keypoints[i]
+            color = colors[i]
+            image = cv2.circle(image, (x, y), 3, color, 3)
+        return image, keypoints, crop
 
     def detect(self, image: MatLike):
         # see: https://github.com/open-mmlab/mmpose/issues/949
@@ -303,3 +331,70 @@ class Hrnetv2_w18_dark:
         keypoints = self.get_keypoints(result)
 
         return self.postprocess(image, keypoints)
+
+
+if __name__ == "__main__":
+    matplotlib.use("TkAgg")
+
+    img_path = argv[1]
+    img = cv2.imread(img_path)
+    img_og = img.copy()
+    net = Yolov5_Lite("./v5lite-finetuned-c.onnx", ["CPUExecutionProvider"])
+
+    imgs, bbs = net.detect(img.copy())
+
+    hrnet = Hrnetv2_w18_dark("./hrnet-2.onnx", ["CPUExecutionProvider"])
+    roi, keypoints, crop = hrnet.detect(imgs[0])
+
+    kp_x1, kp_y1 = keypoints[0]
+    kp_x2, kp_y2 = keypoints[1]
+
+    angle = math.degrees(math.atan2(kp_y2 - kp_y1, kp_x2 - kp_x1))
+
+    rotation_matrix_kps = cv2.getRotationMatrix2D((256 // 2, 256 // 2), angle, 1.0)
+
+    # kp_x1, kp_y1 = np.dot(rotation_matrix_kps, np.array([kp_x1, kp_y1, 1]))
+    # kp_x2, kp_y2 = np.dot(rotation_matrix_kps, np.array([kp_x2, kp_y2, 1]))
+
+    h, w = img.shape[:2]
+
+    bbox = bbs[0]
+    bb_x1, bb_y1, bb_x2, bb_y2 = bbs[0]
+
+    bb_center = ((bb_x1 + bb_x2) // 2, (bb_y1 + bb_y2) // 2)
+    bbox_w = bbox[2] - bbox[0]
+    bbox_h = bbox[3] - bbox[1]
+
+    rect = (bb_center, (bbox_w, bbox_h), angle)
+    box = np.intp(cv2.boxPoints(rect))
+
+    kp_x1 = round(kp_x1 * (bbox_w / 256)) + bbox[0]
+    kp_x2 = round(kp_x2 * (bbox_w / 256)) + bbox[0]
+    kp_y1 = round(kp_y1 * (bbox_h / 256)) + bbox[1]
+    kp_y2 = round(kp_y2 * (bbox_h / 256)) + bbox[1]
+
+    result = cv2.rectangle(img, bbox[:2], bbox[2:], (0, 0, 255), 24)
+    result = cv2.circle(result, (kp_x1, kp_y1), 45, (255, 255, 0), 45)
+    result = cv2.circle(result, (kp_x2, kp_y2), 45, (255, 0, 255), 45)
+
+    plt.subplot(1, 4, 2)
+    plt.imshow(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+    plt.title("Pontos-chave e box")
+    plt.axis("off")
+
+    plt.subplot(1, 4, 1)
+    plt.imshow(cv2.cvtColor(img_og, cv2.COLOR_BGR2RGB))
+    plt.title("Original")
+    plt.axis("off")
+
+    plt.subplot(1, 4, 3)
+    plt.imshow(cv2.cvtColor(roi, cv2.COLOR_BGR2RGB))
+    plt.title("ROI")
+    plt.axis("off")
+
+    plt.subplot(1, 4, 4)
+    plt.imshow(cv2.cvtColor(crop, cv2.COLOR_BGR2RGB))
+    plt.title("CROPPED")
+    plt.axis("off")
+
+    plt.show()
