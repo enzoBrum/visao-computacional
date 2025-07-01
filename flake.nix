@@ -35,9 +35,9 @@
             python313Full
             python313Packages.pip
             python313Packages.virtualenv
-            python312Full
-            python312Packages.pip
-            python312Packages.virtualenv
+            (python312.override {
+              x11Support = true;
+            })
             python311
             python310
             uv
@@ -62,7 +62,6 @@
             m4
             gperf
             unzip
-            cudatoolkit
             libGLU libGL
             xorg.libXi xorg.libXmu freeglut
             xorg.libXext xorg.libX11 xorg.libXv xorg.libXrandr zlib 
@@ -70,14 +69,24 @@
             stdenv.cc
             binutils
             opencv
-            #(opencv.override {
+            #linuxPackages.nvidia_x11_latest
+            #cudaPackages.cudnn
+            #cudatoolkit
+            qt5.full
+            qt5.qtbase
+            xorg.libxcb
+            freetype
+            xorg.libSM
+            xorg.libICE
+
+              #(opencv.override {
             #  enableGtk3 = true;
             #  enableCuda = true;
             #  enableUnfree = true;
             #  enableFfmpeg = true;
             #})
           ]);
-          profile = ''SHELL=/usr/bin/my-fish NIXOS_OZONE_WL="" EXTRA_LDFLAGS="-L/lib" EXTRA_CCFLAGS="-I/usr/include" my-fish'';
+          profile = ''QT_QPA_PLATFORM_PLUGIN_PATH="${pkgs.qt5.qtbase.bin}/lib/qt-${pkgs.qt5.qtbase.version}/plugins/platforms" SHELL=/usr/bin/my-fish NIXOS_OZONE_WL="" EXTRA_LDFLAGS="-L/lib" EXTRA_CCFLAGS="-I/usr/include" my-fish'';
         }).env;
       });
 }

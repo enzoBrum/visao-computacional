@@ -3,12 +3,18 @@ from sys import argv
 
 import cv2
 from cv2.typing import MatLike
-from matplotlib import pyplot as plt
-import matplotlib
 import numpy as np
 from numpy.typing import NDArray
 import onnxruntime as ort
+from torchvision import transforms as v2
 
+from numpy.typing import NDArray
+import onnxruntime as ort
+from tempfile import TemporaryDirectory
+
+from torchvision.transforms import v2
+from PIL import Image
+from sys import argv
 
 class Yolov5_Lite:
     """
@@ -259,7 +265,7 @@ class Hrnetv2_w18_dark:
         center = (w // 2, h // 2)
         rotation_matrix = self.get_rotation_matrix(keypoints[0], keypoints[1], center)
 
-        x, y = np.dot(rotation_matrix, np.array([keypoints[0][0], keypoints[0][1], 1]))
+        _, y = np.dot(rotation_matrix, np.array([keypoints[0][0], keypoints[0][1], 1]))
 
         if y > self.input_shape[1] // 2:
             rotation_matrix = self.get_rotation_matrix(
@@ -267,7 +273,6 @@ class Hrnetv2_w18_dark:
             )
 
         image = cv2.warpAffine(image, rotation_matrix, (w, h), flags=cv2.INTER_CUBIC)
-        colors = [(255, 255, 0), (255, 0, 255)]
 
         kp_x1, kp_y1 = np.dot(
             rotation_matrix, np.array([keypoints[0][0], keypoints[0][1], 1])
@@ -294,7 +299,7 @@ class Hrnetv2_w18_dark:
         rect_y2 = round(rect_center_y + rect_side // 2)
 
         roi = image[rect_y1:rect_y2, rect_x1:rect_x2]
-        return roi
+        return cv2.resize(roi, (228, 228))
 
     def detect(self, image: MatLike):
         # see: https://github.com/open-mmlab/mmpose/issues/949
@@ -303,3 +308,71 @@ class Hrnetv2_w18_dark:
         keypoints = self.get_keypoints(result)
 
         return self.postprocess(image, keypoints)
+
+
+
+
+
+class FeatureExtractor:
+    net: ort.InferenceSession
+    rec_threshold: float
+    val_transforms = v2.Compose(
+        [v2.ToTensor(), v2.Normalize([0.485, 0.485, 0.406], [0.229, 0.224, 0.225])]
+    )
+
+    def __init__(
+        self,
+        model_path: str,
+        providers: list[str] | None = None,
+        rec_threshold: float = 0.3,
+    ) -> None:
+        if providers is None:
+            providers = ort.get_available_providers()
+            if "TensorrtExecutionProvider" in providers:
+                providers.remove("TensorrtExecutionProvider")
+        self.net = ort.InferenceSession(model_path, providers=providers)
+        self.rec_threshold = rec_threshold
+
+    def get_embbeddings(self, imgs: list[str]) -> NDArray[np.float32]:
+        images = []
+        for im in imgs:
+            images.append(self.val_transforms(Image.open(im)).numpy())
+
+        return self.net.run(None, {"in": images})
+
+    def normalize(self, x, axis=-1, eps=1e-8):
+        norm = np.linalg.norm(x, ord=2, axis=axis, keepdims=True)
+        return x / (norm + eps)
+
+    def is_same_person(
+        self, im1: NDArray[np.float32], im2: NDArray[np.float32]
+    ) -> bool:
+        return np.dot(self.normalize(im1), self.normalize(im2)) >= self.rec_threshold
+
+
+if __name__ == "__main__":
+    providers = ["CPUExecutionProvider"]
+    yolo = Yolov5_Lite("./v5lite-finetuned-c.onnx", providers)
+    hrnet = Hrnetv2_w18_dark("./hrnet.onnx", providers)
+    feature_extractor = FeatureExtractor("./feature_extractor.onnx", providers)
+
+    im1 = "./example-imgs/MPD-1_1.jpg"
+    im2 = "./example-imgs/MPD-048-3.jpg"
+
+    im1 = cv2.imread(im1)
+    im2 = cv2.imread(im2)
+
+    palm1 = yolo.detect(im1)[0]
+    palm2 = yolo.detect(im2)[0]
+
+    roi1 = hrnet.detect(palm1)
+    roi2 = hrnet.detect(palm2)
+
+    with TemporaryDirectory() as dirpath:
+        roi1 = cv2.imwrite(f"{dirpath}/im1.jpg", roi1)
+        roi2 = cv2.imwrite(f"{dirpath}/im2.jpg", roi2)
+
+        emb1, emb2 = feature_extractor.get_embbeddings([f"{dirpath}/im1.jpg", f"{dirpath}/im2.jpg"])[0]
+        print(feature_extractor.is_same_person(emb1, emb2))
+
+

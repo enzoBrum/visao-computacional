@@ -293,7 +293,7 @@ class Hrnetv2_w18_dark:
         midpoint_y = (kp_y1 + kp_y2) // 2
 
         rect_center_y = midpoint_y + 0.8 * abs(kp_x1 - kp_x2)
-        rect_side = abs(kp_x1 - kp_x2) * 1.2
+        rect_side = abs(kp_x1 - kp_x2) * 1.1
 
         rect_x1 = max(round(midpoint_x - rect_side // 2), 0)
         rect_x2 = max(round(midpoint_x + rect_side // 2), 0)
@@ -343,7 +343,7 @@ if __name__ == "__main__":
 
     imgs, bbs = net.detect(img.copy())
 
-    hrnet = Hrnetv2_w18_dark("./hrnet-2.onnx", ["CPUExecutionProvider"])
+    hrnet = Hrnetv2_w18_dark("./hrnet.onnx", ["CPUExecutionProvider"])
     roi, keypoints, crop = hrnet.detect(imgs[0])
 
     kp_x1, kp_y1 = keypoints[0]

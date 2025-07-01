@@ -14,3 +14,4 @@ data/*
 .venv2
 *.jpg
 *.png
+dataset/
