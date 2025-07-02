@@ -1,0 +1,301 @@
+<!doctype html>
+<html>
+  <head>
+      <script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f4f7f9;
+            color: #333;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+        .main-container {
+            max-width: 1400px;
+            margin: 20px auto;
+            padding: 25px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            border-bottom: 2px solid #eef;
+            padding-bottom: 15px;
+            color: #1e3a5f;
+        }
+        h2 {
+            color: #333;
+            font-size: 1.2em;
+        }
+        
+        /* Core layout: Use Flexbox for side-by-side columns */
+        #comparison-container {
+            display: flex;
+            justify-content: space-between;
+            gap: 30px;
+            margin-top: 20px;
+        }
+
+        .image-column {
+            flex: 1;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #fafafa;
+            min-width: 0;
+        }
+
+        input[type="file"] {
+            display: block;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+
+        .image-preview {
+            display: block;
+            width: 100%;
+            height: auto;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #e0e0e0;
+            min-height: 200px;
+        }
+
+        /* --- NEW STYLES --- */
+
+        /* Class to hide elements initially */
+        .hidden {
+            display: none;
+        }
+
+        /* Style for the loading indicator */
+        #loading-indicator {
+            text-align: center;
+            font-size: 1.5em;
+            color: #666;
+            padding: 80px 0;
+        }
+
+        /* Container to center the button */
+        .button-container {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        /* Improved button styling */
+        button {
+            padding: 12px 25px;
+            font-size: 1.1em;
+            font-weight: bold;
+            color: #fff;
+            background-color: #007bff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+  </head>
+  <body>
+    <div class="main-container">
+        <h1>Biometric Authenticator</h1>
+        
+        <!-- Loading message, visible on page load -->
+        <div id="loading-indicator">Initializng...</div>
+
+        <!-- This div contains the app's main content and is hidden by default -->
+        <div id="app-content" class="hidden">
+            <!-- Container for the two columns -->
+            <div id="comparison-container">
+                <!-- Column 1 -->
+                <div class="image-column">
+                    <h2>Image 1</h2>
+                    <input type="file" id="fileInput1" accept="image/jpeg">
+                    <img id="imagePreview1" class="image-preview" alt="Preview for Image 1">
+                </div>
+
+                <!-- Column 2 -->
+                <div class="image-column">
+                    <h2>Image 2</h2>
+                    <input type="file" id="fileInput2" accept="image/jpeg">
+                    <img id="imagePreview2" class="image-preview" alt="Preview for Image 2">
+                </div>
+            </div>
+
+            <!-- Button is now outside the flex container and centered -->
+            <div class="button-container">
+                <button onClick="cmp()">Compare</button>
+            </div>
+            <div id="result-div">Same Person:</div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+      async function init(){
+        inference_code = fetch("./inference.py").then(r => r.text())
+        feature_extractor_session = ort.InferenceSession.create(
+          'feature_extractor.onnx',
+          {executionProviders: ["cpu"]}
+        );
+          
+        hrnet_session = ort.InferenceSession.create(
+          'hrnet.onnx',
+          {executionProviders: ["cpu"]}
+        );
+        
+        yolo_session = ort.InferenceSession.create(
+          './v5lite-finetuned-c.onnx',
+          {executionProviders: ["cpu"]}
+        );
+        window.pyodide = await loadPyodide();
+        await window.pyodide.loadPackage("micropip");
+        const micropip = window.pyodide.pyimport("micropip");
+        await micropip.install('numpy');
+        await micropip.install('opencv-python');
+        
+          
+        window.inference_code = await inference_code
+        window.feature_extractor_session = await feature_extractor_session
+        window.hrnet_session = await hrnet_session
+        window.yolo_session = await yolo_session
+
+        await pyodide.runPython(window.inference_code)
+
+        document.getElementById('loading-indicator').style.display = 'none';
+
+        // Find the main content container and remove the .hidden class to make it visible
+        const appContent = document.getElementById('app-content');
+        appContent.classList.remove('hidden');
+      }
+      init();
+    </script>
+    <script>
+        async function cmp() {
+
+            async function get_roi(img) {
+                await pyodide.globals.set("IMG", img)
+                const proxy_arrA = await pyodide.runPython(`yolo_pre_detect()`)
+                const arrA = proxy_arrA.toJs();
+                proxy_arrA.destroy()
+
+                const tensorA = new ort.Tensor("float32", arrA, [1, 3, 320, 320])
+                const resultA = await window.yolo_session.run({images: tensorA})
+                self.arr = await resultA.outputs.getData()
+                
+                const proxy_hrnetA = await pyodide.runPython('yolo_post_detect()')
+                const hrnet_arrA = proxy_hrnetA.toJs();
+                proxy_hrnetA.destroy()
+                tensorA.dispose()
+                resultA.outputs.dispose()
+
+                const hrnet_tensor = new ort.Tensor("float16", hrnet_arrA, [1, 3, 256, 256])
+                const hrnet_result = await window.hrnet_session.run({input: hrnet_tensor})
+
+                self.arr = new Float32Array(await hrnet_result.output.getData())
+                const r_proxy = await pyodide.runPython('hrnet_post_process()')
+
+                const r_arr = r_proxy.toJs()
+                r_proxy.destroy()
+
+                hrnet_result.output.dispose()
+                return r_arr
+            }
+
+            const roiA = await get_roi(window.base64String_A)
+            const roiB = await get_roi(window.base64String_B)
+
+            self.arr1 = roiA
+            self.arr2 = roiB
+
+            const proxy_ft = await pyodide.runPython('get_embs()')
+            const ft_arr = proxy_ft.toJs();
+            proxy_ft.destroy()
+
+            const ft_tensor = new ort.Tensor('float32', ft_arr, [2, 3, 228, 228])
+            const ft_result = await window.feature_extractor_session.run({in: ft_tensor})
+
+            self.arr = await ft_result.out.getData();
+            const result = await pyodide.runPython('is_same_person()')
+
+            ft_tensor.dispose()
+            const same_person = result === "true"
+
+            console.log("HERE")
+            document.getElementById("result-div").innerHTML = `Same Person: ${same_person ? 'YES' : 'NO'}`
+        }
+    </script>
+    <script>
+        // --- Reusable function to handle file processing ---
+        // This prevents code duplication.
+        function handleFile(file, previewElement, i) {
+            // Reset view if no file is selected (e.g., user cancels)
+            if (!file) {
+                previewElement.src = '';
+                return;
+            }
+
+            // --- Task 1: Show the image ---
+            const objectURL = URL.createObjectURL(file);
+            previewElement.src = objectURL;
+            previewElement.onload = () => URL.revokeObjectURL(objectURL);
+
+            // --- Task 2: Read the file's content ---
+            const reader = new FileReader();
+            
+            reader.onload = (e) => {
+                document.getElementById("result-div").innerHTML = `Same Person:`
+                const bytes = new Uint8Array(e.target.result);
+                let binary = '';
+                for (let i = 0; i < bytes.byteLength; i++) {
+                  binary += String.fromCharCode(bytes[i]);
+                }
+                const base64String= btoa(binary);
+
+                if (i == 0)
+                    window.base64String_A = base64String
+                else
+                    window.base64String_B = base64String
+                
+                // Display the Base64 string in the output element.
+            };
+
+            reader.onerror = (e) => {
+                console.error("Error reading file:", e);
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        // --- Setup Event Listeners ---
+
+        // Get references to all the elements
+        const fileInput1 = document.getElementById('fileInput1');
+        const imagePreview1 = document.getElementById('imagePreview1');
+
+        const fileInput2 = document.getElementById('fileInput2');
+        const imagePreview2 = document.getElementById('imagePreview2');
+
+        // Attach listener for the first file input
+        fileInput1.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            // Call our reusable function with the elements from the first column
+            handleFile(file, imagePreview1, 0);
+        });
+
+        // Attach listener for the second file input
+        fileInput2.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            // Call our reusable function with the elements from the second column
+            handleFile(file, imagePreview2, 1);
+        });
+    </script>
+  </body>
+</html>

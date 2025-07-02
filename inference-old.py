@@ -1,43 +1,51 @@
 import math
+from sys import argv
 
 import cv2
-from base64 import b64decode
 from cv2.typing import MatLike
 import numpy as np
 from numpy.typing import NDArray
+import onnxruntime as ort
+from torchvision import transforms as v2
 
+from numpy.typing import NDArray
+import onnxruntime as ort
 from tempfile import TemporaryDirectory
-from tempfile import NamedTemporaryFile
+
+from torchvision.transforms import v2
+from PIL import Image
+from sys import argv
 
 class Yolov5_Lite:
     """
     FROM: https://github.com/ppogg/YOLOv5-Lite/blob/9d649a64f8293b128c672adcd09aa762df9bc6bc/python_demo/onnxruntime/v5lite.py
     """
 
-    #net: ort.InferenceSession
+    net: ort.InferenceSession
     confThreshold: float
     nmsThreshold: float
     input_shape: tuple[int, int]
 
     def __init__(
         self,
-        #model_path: str,
-        #providers: list[str] | None = None,
+        model_path: str,
+        providers: list[str] | None = None,
         conf_threshold: float = 0.5,
         nms_threshold: float = 0.5,
     ) -> None:
-        #if providers is None:
-        #    providers = ort.get_available_providers()
-        #    if "TensorrtExecutionProvider" in providers:
-        #        providers.remove("TensorrtExecutionProvider")
-        #
-        #self.net = ort.InferenceSession(model_path, providers=providers)
+        if providers is None:
+            providers = ort.get_available_providers()
+            if "TensorrtExecutionProvider" in providers:
+                providers.remove("TensorrtExecutionProvider")
+
+        self.net = ort.InferenceSession(model_path, providers=providers)
         self.confThreshold = conf_threshold
         self.nmsThreshold = nms_threshold
         self.classes = {0: "Palm"}
 
-        #w, h = self.net.get_inputs()[0].shape[2:4]
-        self.input_shape = (320,320)
+        w, h = self.net.get_inputs()[0].shape[2:4]
+        self.input_shape = (w, h)
+        print(f"YOLO: {self.input_shape}")
 
     def letterBox(self, srcimg, keep_ratio=True):
         top, left, newh, neww = 0, 0, self.input_shape[0], self.input_shape[1]
@@ -126,21 +134,17 @@ class Yolov5_Lite:
         )
         return frame
 
-    def pre_detect(self, srcimg):
+    def detect(self, srcimg):
         img, newh, neww, top, left = self.letterBox(srcimg)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32) / 255.0
+        blob = np.expand_dims(np.transpose(img, (2, 0, 1)), axis=0)
 
-        self.srcimg = srcimg
-        self.newh = newh
-        self.neww = neww
-        self.top = top
-        self.left = left
-
-        return np.expand_dims(np.transpose(img, (2, 0, 1)), axis=0)
-
-    def post_detect(self, srcimg, outs):
-        bbs = self.postprocess(srcimg, outs, (self.newh, self.neww, self.top, self.left))
+        print(f"YOLO BLOB: {blob.shape}")
+        outs = self.net.run(None, {self.net.get_inputs()[0].name: blob})[0]
+        print(f"YOLO outs: {outs.shape}")
+        print(outs)
+        bbs = self.postprocess(srcimg, outs, (newh, neww, top, left))
 
         imgs = []
         h, w = srcimg.shape[0:2]
@@ -161,6 +165,8 @@ class Hrnetv2_w18_dark:
     inspired from: https://github.com/open-mmlab/mmpose/blob/71ec36ebd63c475ab589afc817868e749a61491f/configs/hand_2d_keypoint/topdown_heatmap/coco_wholebody_hand/td-hm_hrnetv2-w18_dark-8xb32-210e_coco-wholebody-hand-256x256.py
     """
 
+    net: ort.InferenceSession
+
     std = np.array([58.395, 57.12, 57.375], np.float16)
     mean = np.array([123.675, 116.28, 103.53], np.float16)
 
@@ -168,18 +174,19 @@ class Hrnetv2_w18_dark:
 
     def __init__(
         self,
-        #model_path: str,
-        #providers: list[str] | None = None,
+        model_path: str,
+        providers: list[str] | None = None,
         confidence_threshold: float = 0.0,
     ) -> None:
-        #if providers is None:
-        #    providers = ort.get_available_providers()
-        #    if "TensorrtExecutionProvider" in providers:
-        #        providers.remove("TensorrtExecutionProvider")
-        #self.net = ort.InferenceSession(model_path, providers=providers)
-        w, h = (256, 256)
+        if providers is None:
+            providers = ort.get_available_providers()
+            if "TensorrtExecutionProvider" in providers:
+                providers.remove("TensorrtExecutionProvider")
+        self.net = ort.InferenceSession(model_path, providers=providers)
+        w, h = self.net.get_inputs()[0].shape[2:4]
         self.input_shape = (w, h)
         self.confidence_threshold = confidence_threshold
+        print(f"HRNET shape: {self.input_shape}")
 
     def preprocess(self, img: NDArray) -> NDArray[np.float32]:
         img = cv2.resize(img, self.input_shape)
@@ -299,45 +306,49 @@ class Hrnetv2_w18_dark:
         roi = image[rect_y1:rect_y2, rect_x1:rect_x2]
         return cv2.resize(roi, (228, 228))
 
-    def pre_detect(self, image):
-        return self.preprocess(image)
+    def detect(self, image: MatLike):
+        # see: https://github.com/open-mmlab/mmpose/issues/949
+        img = self.preprocess(image)
+        print(f"HRNET: {img.shape}")
+        result = self.net.run(None, {self.net.get_inputs()[0].name: img})
+        print(f"HRNET result: {result[0].shape}")
+        keypoints = self.get_keypoints(result)
 
-    def post_detect(self, result, image):
-        return self.postprocess(image, self.get_keypoints(result))
+        return self.postprocess(image, keypoints)
+
+
 
 
 
 class FeatureExtractor:
+    net: ort.InferenceSession
     rec_threshold: float
-
-    mean = np.array([0.485, 0.485, 0.406])
-    std = np.array([0.229, 0.224, 0.225])
+    val_transforms = v2.Compose(
+        [v2.ToTensor(), v2.Normalize([0.485, 0.485, 0.406], [0.229, 0.224, 0.225])]
+    )
 
     def __init__(
         self,
-        #model_path: str,
-        #providers: list[str] | None = None,
+        model_path: str,
+        providers: list[str] | None = None,
         rec_threshold: float = 0.3,
     ) -> None:
-        #if providers is None:
-        #    providers = ort.get_available_providers()
-        #    if "TensorrtExecutionProvider" in providers:
-        #        providers.remove("TensorrtExecutionProvider")
-        #self.net = ort.InferenceSession(model_path, providers=providers)
+        if providers is None:
+            providers = ort.get_available_providers()
+            if "TensorrtExecutionProvider" in providers:
+                providers.remove("TensorrtExecutionProvider")
+        self.net = ort.InferenceSession(model_path, providers=providers)
         self.rec_threshold = rec_threshold
 
-    def pre_process(self, im):
-        im = cv2.cvtColor(im, cv2.COLOR_BGR2RGB)
-        im = ((im / 255.0) - self.mean) / self.std
-        return np.transpose(im, (2, 0, 1))
-
-    def get_embbeddings(self, imgs: list) -> NDArray[np.float32]:
+    def get_embbeddings(self, imgs: list[str]) -> NDArray[np.float32]:
         images = []
         for im in imgs:
-            im = ((im / 255.0) - self.mean) / self.std
-            images.append(np.transpose(im, (2, 0, 1)))
+            images.append(self.val_transforms(Image.open(im)).numpy())
 
-        return self.net.run(None, {"in": images})
+        print(f"FT: {np.array(images).shape}")
+        r= self.net.run(None, {"in": images})
+        print(f"FT R.: {r[0].shape}")
+        return r
 
     def normalize(self, x, axis=-1, eps=1e-8):
         norm = np.linalg.norm(x, ord=2, axis=axis, keepdims=True)
@@ -346,100 +357,37 @@ class FeatureExtractor:
     def is_same_person(
         self, im1: NDArray[np.float32], im2: NDArray[np.float32]
     ) -> bool:
-        print(np.dot(self.normalize(im1), self.normalize(im2)))
+        print(np.dot(self.normalize(im1), self.normalize(im2)) )
         return np.dot(self.normalize(im1), self.normalize(im2)) >= self.rec_threshold
 
-    
-YOLO = Yolov5_Lite()
-HRNET = Hrnetv2_w18_dark()
-FT = FeatureExtractor()
 
-NET_RESULT = None
-IMG = None
+if __name__ == "__main__":
+    providers = ["CPUExecutionProvider"]
+    yolo = Yolov5_Lite("./v5lite-finetuned-c.onnx", providers)
+    hrnet = Hrnetv2_w18_dark("./hrnet.onnx", providers)
+    feature_extractor = FeatureExtractor("./feature_extractor.onnx", providers)
+    print(hrnet.net.get_inputs()[0].name)
+    print(feature_extractor.net.get_inputs()[0].name)
+    print(feature_extractor.net.get_outputs()[0].name)
 
-DECODED_IMG = None
-YOLO_IMG = None
+    im1 = "/home/erb/Downloads/IMG_8210.jpg"
+    im2 = "/home/erb/Downloads/IMG_8210.jpg"
 
-def yolo_pre_detect():
-    global DECODED_IMG
-    arr = b64decode(IMG)    
-    with NamedTemporaryFile("wb") as f:
-        f.write(arr)
-        f.flush()
-        
-        im = cv2.imread(f.name)
-        
-    DECODED_IMG = im
-    arr = YOLO.pre_detect(im)
+    im1 = cv2.imread(im1)
+    im2 = cv2.imread(im2)
 
-    arr = arr.reshape(-1)
-    return arr
+    palm1 = yolo.detect(im1)[0]
+    palm2 = yolo.detect(im2)[0]
 
-def yolo_post_detect():
-    global YOLO_IMG
-    from js import arr
-    
-    arr2 = np.asarray(arr.to_py(), np.float32).reshape(1, 6)
-    img = YOLO.post_detect(DECODED_IMG, arr2)[0]
-    YOLO_IMG = img
-    arr3 = HRNET.pre_detect(img)
+    roi1 = hrnet.detect(palm1)
+    roi2 = hrnet.detect(palm2)
+
+    with TemporaryDirectory() as dirpath:
+        roi1 = cv2.imwrite(f"{dirpath}/im1.jpg", roi1)
+        roi2 = cv2.imwrite(f"{dirpath}/im2.jpg", roi2)
+
+        emb1, emb2 = feature_extractor.get_embbeddings([f"{dirpath}/im1.jpg", f"{dirpath}/im2.jpg"])[0]
+        print(emb1)
+        print(feature_extractor.is_same_person(emb1, emb2))
 
 
-    return arr3.reshape(-1).tolist()
-
-def hrnet_post_process():
-    from js import arr
-    
-    arr2 = np.asarray(arr.to_py(), np.float16).reshape(1, 2, 64, 64)
-    return HRNET.post_detect([arr2], YOLO_IMG).reshape(-1).tolist()
-
-
-def get_embs():
-    from js import arr1, arr2
-
-    arr1_conv = np.asarray(arr1, np.float32).reshape(228, 228, 3)
-    arr2_conv = np.asarray(arr2, np.float32).reshape(228, 228, 3)
-
-    arr1_conv = FT.pre_process(arr1_conv)
-    arr2_conv = FT.pre_process(arr2_conv)
-
-    arr = np.stack((arr1_conv, arr2_conv), 0)
-    return arr.reshape(-1).tolist()
-
-def is_same_person():
-    from js import arr
-
-    arr = np.asarray(arr.to_py(), np.float32).reshape(2, 512)
-    emb1, emb2 = arr[0], arr[1]
-
-    
-    return str(FT.is_same_person(emb1, emb2)).lower()
-
-#if __name__ == "__main__":
-#    providers = ["CPUExecutionProvider"]
-#    yolo = Yolov5_Lite("./v5lite-finetuned-c.onnx", providers)
-#    hrnet = Hrnetv2_w18_dark("./hrnet.onnx", providers)
-#    feature_extractor = FeatureExtractor("./feature_extractor.onnx", providers)
-#
-#    im1 = "./example-imgs/MPD-1_1.jpg"
-#    im2 = "./example-imgs/MPD-1_8.jpg"
-#
-#    im1 = cv2.imread(im1)
-#    im2 = cv2.imread(im2)
-#
-#    palm1 = yolo.detect(im1)[0]
-#    palm2 = yolo.detect(im2)[0]
-#
-#    roi1 = hrnet.detect(palm1)
-#    roi2 = hrnet.detect(palm2)
-#
-#    with TemporaryDirectory() as dirpath:
-#        roi1 = cv2.imwrite(f"{dirpath}/im1.jpg", roi1)
-#        roi2 = cv2.imwrite(f"{dirpath}/im2.jpg", roi2)
-#
-#        emb1, emb2 = feature_extractor.get_embbeddings([f"{dirpath}/im1.jpg", f"{dirpath}/im2.jpg"])[0]
-#        print(feature_extractor.is_same_person(emb1, emb2))
-#
-#
-#def yolo_detect(srcimg):
-#    
